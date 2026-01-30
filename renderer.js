@@ -26,6 +26,10 @@ class Renderer {
             background: 'rgba(10, 14, 39, 0.5)',
             grid: 'rgba(99, 102, 241, 0.1)'
         };
+
+        // 마우스 드래그 상태
+        this.isDragging = false;
+        this.dragOffsetX = 0;
     }
 
     resizeCanvas() {
@@ -140,7 +144,7 @@ class Renderer {
     drawPendulum(cartPos) {
         const pendulumLength = this.pendulum.L * this.scale;
         const endX = cartPos.x + pendulumLength * Math.sin(this.pendulum.theta);
-        const endY = cartPos.y + pendulumLength * Math.cos(this.pendulum.theta);
+        const endY = cartPos.y - pendulumLength * Math.cos(this.pendulum.theta);
 
         // 펜듈럼 막대
         this.ctx.strokeStyle = this.colors.pendulum;
@@ -218,5 +222,101 @@ class Renderer {
         const cartPos = this.drawCart();
         this.drawPendulum(cartPos);
         this.drawForceIndicator(cartPos);
+    }
+
+    /**
+     * 마우스 드래그 기능
+     */
+    enableMouseDrag() {
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        this.canvas.addEventListener('mouseup', () => this.onMouseUp());
+        this.canvas.addEventListener('mouseleave', () => this.onMouseUp());
+
+        // 터치 지원
+        this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e));
+        this.canvas.addEventListener('touchmove', (e) => this.onTouchMove(e));
+        this.canvas.addEventListener('touchend', () => this.onMouseUp());
+    }
+
+    onMouseDown(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const cartX = this.centerX + this.pendulum.x * this.scale;
+        const cartY = this.centerY;
+        const cartWidth = 60;
+        const cartHeight = 40;
+
+        // 카트 영역 클릭 확인
+        if (mouseX >= cartX - cartWidth / 2 && mouseX <= cartX + cartWidth / 2 &&
+            mouseY >= cartY - cartHeight / 2 && mouseY <= cartY + cartHeight / 2) {
+            this.isDragging = true;
+            this.dragOffsetX = mouseX - cartX;
+            this.canvas.style.cursor = 'grabbing';
+        }
+    }
+
+    onMouseMove(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const cartX = this.centerX + this.pendulum.x * this.scale;
+        const cartY = this.centerY;
+        const cartWidth = 60;
+        const cartHeight = 40;
+
+        // 커서 변경
+        if (!this.isDragging) {
+            if (mouseX >= cartX - cartWidth / 2 && mouseX <= cartX + cartWidth / 2 &&
+                mouseY >= cartY - cartHeight / 2 && mouseY <= cartY + cartHeight / 2) {
+                this.canvas.style.cursor = 'grab';
+            } else {
+                this.canvas.style.cursor = 'default';
+            }
+        }
+
+        if (this.isDragging && !this.pendulum.controlActive) {
+            const newCartX = mouseX - this.dragOffsetX;
+            const newX = (newCartX - this.centerX) / this.scale;
+
+            // 위치 제한
+            this.pendulum.x = Math.max(-this.pendulum.maxX, Math.min(this.pendulum.maxX, newX));
+
+            // 속도 계산 (간단한 차분)
+            // 실제로는 이전 프레임과의 시간 차이를 고려해야 하지만 근사값 사용
+            this.pendulum.x_dot = 0; // 드래그 중에는 속도를 0으로
+        }
+    }
+
+    onMouseUp() {
+        this.isDragging = false;
+        this.canvas.style.cursor = 'default';
+    }
+
+    onTouchStart(e) {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            this.onMouseDown(mouseEvent);
+        }
+    }
+
+    onTouchMove(e) {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            this.onMouseMove(mouseEvent);
+        }
     }
 }

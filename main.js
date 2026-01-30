@@ -26,6 +26,9 @@ function init() {
     controller = new PendulumController(pendulum);
     renderer = new Renderer(canvas, pendulum);
 
+    // 마우스 드래그 활성화
+    renderer.enableMouseDrag();
+
     // 초기 렌더링
     renderer.render();
     updateTelemetry();
