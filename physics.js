@@ -80,8 +80,8 @@ class InvertedPendulum {
         // 각도를 [-PI, PI] 범위로 정규화
         this.theta = ((this.theta + Math.PI) % (2 * Math.PI)) - Math.PI;
 
-        // 각속도 제한 (발산 방지)
-        const maxAngularVelocity = 8.0; // rad/s
+        // 각속도 제한 (발산 방지 - 매우 강하게)
+        const maxAngularVelocity = 3.0; // rad/s (대폭 감소)
         if (Math.abs(this.theta_dot) > maxAngularVelocity) {
             this.theta_dot = Math.sign(this.theta_dot) * maxAngularVelocity;
         }
@@ -129,7 +129,7 @@ class PendulumController {
         this.K = [-1.0, -1.73, 18.6, 3.45];  // LQR 게인
 
         // 스윙업 파라미터
-        this.K_energy = 12.0;   // 에너지 제어 게인
+        this.K_energy = 6.0;    // 에너지 제어 게인 (감소)
 
         // 모드 전환
         this.balanceThreshold = 0.4; // 라디안 (약 23도)
@@ -162,9 +162,9 @@ class PendulumController {
         const E = this.getEnergy();
         const E_error = E_target - E;
 
-        // 각속도가 너무 크면 스윙업 중단 (발산 방지)
-        if (Math.abs(this.pendulum.theta_dot) > 7.0) {
-            return -10.0 * this.pendulum.x - 15.0 * this.pendulum.x_dot;
+        // 각속도가 너무 크면 스윙업 중단 (발산 방지 - 강화)
+        if (Math.abs(this.pendulum.theta_dot) > 2.5) {
+            return -15.0 * this.pendulum.x - 20.0 * this.pendulum.x_dot;
         }
 
         // 에너지가 부족하면 펜듈럼과 같은 방향으로 힘을 가함
