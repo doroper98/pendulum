@@ -180,9 +180,14 @@ class PendulumController {
         // 에너지 오차에 비례하는 힘
         let force = this.K_energy * E_error * sign;
 
-        // 카트가 중앙으로 돌아오도록 (약하게)
-        force -= 1.0 * this.pendulum.x;
-        force -= 2.0 * this.pendulum.x_dot;
+        // 카트가 중앙으로 돌아오도록 (강화)
+        force -= 3.0 * this.pendulum.x;
+        force -= 5.0 * this.pendulum.x_dot;
+
+        // 레일 끝에 가까우면 강력하게 중앙으로
+        if (Math.abs(this.pendulum.x) > this.pendulum.maxX * 0.7) {
+            force -= 20.0 * this.pendulum.x;
+        }
 
         return force;
     }
@@ -197,8 +202,13 @@ class PendulumController {
         // PD 제어
         const force_angle = this.Kp * theta_error + this.Kd * (-this.pendulum.theta_dot);
 
-        // 카트 위치 제어
-        const force_cart = -this.Kp_cart * this.pendulum.x - this.Kd_cart * this.pendulum.x_dot;
+        // 카트 위치 제어 (강화)
+        let force_cart = -this.Kp_cart * this.pendulum.x - this.Kd_cart * this.pendulum.x_dot;
+
+        // 레일 끝에 가까우면 매우 강력하게 중앙으로
+        if (Math.abs(this.pendulum.x) > this.pendulum.maxX * 0.8) {
+            force_cart -= 30.0 * this.pendulum.x;
+        }
 
         return force_angle + force_cart;
     }
