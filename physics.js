@@ -117,17 +117,17 @@ class PendulumController {
     constructor(pendulum) {
         this.pendulum = pendulum;
 
-        // 단순화된 제어 파라미터
-        this.Kp = 20.0;         // 각도 비례 게인
-        this.Kd = 10.0;         // 각속도 미분 게인
-        this.Kp_cart = 1.0;     // 카트 위치 게인
-        this.Kd_cart = 5.0;     // 카트 속도 게인
+        // 조정된 제어 파라미터
+        this.Kp = 40.0;         // 각도 비례 게인 (증가)
+        this.Kd = 15.0;         // 각속도 미분 게인 (증가)
+        this.Kp_cart = 2.0;     // 카트 위치 게인 (증가)
+        this.Kd_cart = 8.0;     // 카트 속도 게인 (증가)
 
         // 스윙업 파라미터
-        this.K_energy = 2.0;    // 에너지 제어 게인
+        this.K_energy = 8.0;    // 에너지 제어 게인 (증가)
 
         // 모드 전환
-        this.balanceThreshold = 0.5; // 라디안 (약 30도)
+        this.balanceThreshold = 0.35; // 라디안 (약 20도)
         this.mode = 'swing';
 
         // 초기 충격
@@ -150,7 +150,7 @@ class PendulumController {
     }
 
     /**
-     * 스윙업 제어 (매우 단순화)
+     * 스윙업 제어 (개선)
      */
     swingUpControl() {
         const E_target = this.pendulum.m * this.pendulum.g * this.pendulum.L;
@@ -158,14 +158,19 @@ class PendulumController {
         const E_error = E_target - E;
 
         // 에너지가 부족하면 펜듈럼과 같은 방향으로 힘을 가함
-        const sign = Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
+        let sign = Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
+
+        // 각속도가 너무 작으면 방향을 강제로 설정
+        if (Math.abs(this.pendulum.theta_dot) < 0.05) {
+            sign = Math.cos(this.pendulum.theta) > 0 ? 1 : -1;
+        }
 
         // 에너지 오차에 비례하는 힘
         let force = this.K_energy * E_error * sign;
 
-        // 카트가 중앙으로 돌아오도록
-        force -= 0.5 * this.pendulum.x;
-        force -= 1.0 * this.pendulum.x_dot;
+        // 카트가 중앙으로 돌아오도록 (약하게)
+        force -= 1.0 * this.pendulum.x;
+        force -= 2.0 * this.pendulum.x_dot;
 
         return force;
     }
@@ -198,16 +203,16 @@ class PendulumController {
             return;
         }
 
-        // 초기 충격 (0.3초 동안)
+        // 초기 충격 (0.4초 동안, 더 강하게)
         if (!this.kickApplied) {
             if (this.kickTime === 0) {
                 this.kickTime = performance.now();
             }
 
             const elapsed = (performance.now() - this.kickTime) / 1000;
-            if (elapsed < 0.3) {
-                // 작은 진동
-                this.pendulum.F = 10.0 * Math.sin(elapsed * 15);
+            if (elapsed < 0.4) {
+                // 더 강한 진동
+                this.pendulum.F = 20.0 * Math.sin(elapsed * 12);
                 return;
             } else {
                 this.kickApplied = true;
@@ -217,7 +222,7 @@ class PendulumController {
         // 모드 결정
         const angleFromTop = Math.abs(this.pendulum.theta);
 
-        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 2.0) {
+        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 1.5) {
             this.mode = 'balance';
         } else {
             this.mode = 'swing';
