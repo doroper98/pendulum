@@ -7,7 +7,7 @@ class InvertedPendulum {
         // 물리 파라미터
         this.M = 1.0;           // 카트 질량 (kg)
         this.m = 0.3;           // 펜듈럼 질량 (kg)
-        this.L = 1.0;           // 펜듈럼 길이 (m)
+        this.L = 1.5;           // 펜듈럼 길이 (m) - 1.5배 증가
         this.g = 9.81;          // 중력 가속도 (m/s^2)
         this.b = 0.1;           // 카트 마찰 계수
 
