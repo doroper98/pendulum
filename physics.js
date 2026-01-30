@@ -116,17 +116,17 @@ class PendulumController {
     constructor(pendulum) {
         this.pendulum = pendulum;
 
-        // PID 제어 파라미터 (밸런싱 모드)
-        this.Kp_balance = 100.0;    // 비례 게인
-        this.Kd_balance = 30.0;     // 미분 게인
-        this.Ki_balance = 1.0;      // 적분 게인
+        // PID 제어 파라미터 (밸런싱 모드) - 더 보수적으로 조정
+        this.Kp_balance = 60.0;     // 비례 게인 (감소)
+        this.Kd_balance = 25.0;     // 미분 게인 (감소)
+        this.Ki_balance = 0.5;      // 적분 게인 (감소)
 
         // 스윙업 제어 파라미터
-        this.K_swing = 10.0;        // 에너지 제어 게인
+        this.K_swing = 5.0;         // 에너지 제어 게인 (감소)
         this.E_desired = this.pendulum.m * this.pendulum.g * this.pendulum.L; // 목표 에너지
 
         // 모드 전환 임계값
-        this.balanceThreshold = 0.3; // 라디안 (약 17도)
+        this.balanceThreshold = 0.4; // 라디안 (약 23도, 더 넓게)
 
         // 제어 모드
         this.mode = 'swing';  // 'swing' 또는 'balance'
@@ -134,6 +134,10 @@ class PendulumController {
         // 적분 항
         this.integral = 0;
         this.prevError = 0;
+
+        // 초기 충격 상태
+        this.initialKickApplied = false;
+        this.kickStartTime = 0;
     }
 
     /**
@@ -158,7 +162,13 @@ class PendulumController {
         const E_error = this.E_desired - E;
 
         // 에너지 오차에 비례하여 힘 가함
-        const force = this.K_swing * E_error * Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
+        // 각속도가 너무 작으면 방향을 랜덤하게 (초기 충격)
+        let direction = Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
+        if (Math.abs(this.pendulum.theta_dot) < 0.1) {
+            direction = Math.cos(this.pendulum.theta) > 0 ? 1 : -1;
+        }
+
+        const force = this.K_swing * E_error * direction;
 
         return force;
     }
@@ -176,15 +186,15 @@ class PendulumController {
         const derivative = (theta_error - this.prevError) / dt;
         this.prevError = theta_error;
 
-        // 적분 와인드업 방지
-        this.integral = Math.max(-10, Math.min(10, this.integral));
+        // 적분 와인드업 방지 (더 강하게)
+        this.integral = Math.max(-5, Math.min(5, this.integral));
 
         // 제어력 계산 (각도와 위치 모두 고려)
         const force = this.Kp_balance * theta_error
             + this.Kd_balance * (-this.pendulum.theta_dot)
             + this.Ki_balance * this.integral
-            + 5.0 * x_error  // 위치 복원력
-            + 10.0 * (-this.pendulum.x_dot); // 위치 감쇠
+            + 3.0 * x_error  // 위치 복원력 (감소)
+            + 8.0 * (-this.pendulum.x_dot); // 위치 감쇠 (감소)
 
         return force;
     }
@@ -198,13 +208,30 @@ class PendulumController {
             this.mode = 'swing';
             this.integral = 0;
             this.prevError = 0;
+            this.initialKickApplied = false;
             return;
+        }
+
+        // 초기 충격 적용 (시작 후 처음 0.5초 동안)
+        if (!this.initialKickApplied) {
+            if (this.kickStartTime === 0) {
+                this.kickStartTime = performance.now();
+            }
+            const elapsed = (performance.now() - this.kickStartTime) / 1000;
+
+            if (elapsed < 0.5) {
+                // 작은 초기 충격을 가함
+                this.pendulum.F = 15.0 * Math.sin(elapsed * 10); // 진동하는 힘
+                return;
+            } else {
+                this.initialKickApplied = true;
+            }
         }
 
         // 모드 결정
         const angleFromTop = Math.abs(this.pendulum.theta);
 
-        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 2.0) {
+        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 1.5) {
             this.mode = 'balance';
         } else if (angleFromTop > this.balanceThreshold * 1.5) {
             this.mode = 'swing';
@@ -219,7 +246,7 @@ class PendulumController {
             force = this.swingUpControl();
         }
 
-        // 제어력 제한
+        // 제어력 제한 (더 강하게)
         force = Math.max(-this.pendulum.maxForce, Math.min(this.pendulum.maxForce, force));
 
         this.pendulum.F = force;
