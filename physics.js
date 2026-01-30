@@ -119,16 +119,15 @@ class PendulumController {
     constructor(pendulum) {
         this.p = pendulum;
 
-        // 스윙업 파라미터
-        this.swingGain = 25.0;
+        // 스윙업 파라미터 (강화)
+        this.swingGain = 50.0;
 
         // LQR 게인 [x, x_dot, theta, theta_dot]
-        // 이 값들은 시스템 파라미터에 맞게 계산됨
-        this.K = [1.0, 2.5, -30.0, -5.0];
+        this.K = [1.0, 2.5, -35.0, -6.0];
 
-        // 모드 전환 파라미터
-        this.switchAngle = 0.3;  // 약 17도
-        this.switchVel = 1.0;
+        // 모드 전환 파라미터 (더 빨리 전환)
+        this.switchAngle = 0.4;  // 약 23도
+        this.switchVel = 2.0;
 
         // 상태
         this.mode = 'idle';
@@ -169,8 +168,8 @@ class PendulumController {
         // 에너지 펌핑: 펜듈럼이 움직이는 방향으로 힘을 가함
         let u = this.swingGain * E_error * Math.sign(this.p.theta_dot * Math.cos(this.p.theta));
 
-        // 카트 위치 복원
-        u -= 2.0 * this.p.x + 3.0 * this.p.x_dot;
+        // 카트 위치 복원 (약하게)
+        u -= 1.0 * this.p.x + 2.0 * this.p.x_dot;
 
         // 레일 끝 보호
         if (Math.abs(this.p.x) > this.p.maxX * 0.7) {
@@ -226,10 +225,11 @@ class PendulumController {
             this.startTime = performance.now();
         }
 
-        // 처음 0.3초: 초기 충격
+        // 처음 0.5초: 강력한 초기 충격
         const elapsed = (performance.now() - this.startTime) / 1000;
-        if (elapsed < 0.3) {
-            this.p.F = 20 * Math.sin(elapsed * 20);
+        if (elapsed < 0.5) {
+            // 강력한 충격으로 바로 스윙업 시작
+            this.p.F = 40 * Math.sin(elapsed * 15);
             this.mode = 'kick';
             return;
         }
