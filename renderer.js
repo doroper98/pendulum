@@ -30,6 +30,8 @@ class Renderer {
         // 마우스 드래그 상태
         this.isDragging = false;
         this.dragOffsetX = 0;
+        this.lastDragX = 0;
+        this.lastDragTime = 0;
     }
 
     resizeCanvas() {
@@ -254,6 +256,8 @@ class Renderer {
             mouseY >= cartY - cartHeight / 2 && mouseY <= cartY + cartHeight / 2) {
             this.isDragging = true;
             this.dragOffsetX = mouseX - cartX;
+            this.lastDragX = this.pendulum.x;
+            this.lastDragTime = performance.now();
             this.canvas.style.cursor = 'grabbing';
         }
     }
@@ -279,20 +283,30 @@ class Renderer {
         }
 
         if (this.isDragging && !this.pendulum.controlActive) {
+            const currentTime = performance.now();
             const newCartX = mouseX - this.dragOffsetX;
             const newX = (newCartX - this.centerX) / this.scale;
 
             // 위치 제한
-            this.pendulum.x = Math.max(-this.pendulum.maxX, Math.min(this.pendulum.maxX, newX));
+            const clampedX = Math.max(-this.pendulum.maxX, Math.min(this.pendulum.maxX, newX));
 
-            // 속도 계산 (간단한 차분)
-            // 실제로는 이전 프레임과의 시간 차이를 고려해야 하지만 근사값 사용
-            this.pendulum.x_dot = 0; // 드래그 중에는 속도를 0으로
+            // 속도 계산 (이전 위치와의 차이)
+            if (this.lastDragTime > 0) {
+                const dt = (currentTime - this.lastDragTime) / 1000; // 초 단위
+                if (dt > 0) {
+                    this.pendulum.x_dot = (clampedX - this.lastDragX) / dt;
+                }
+            }
+
+            this.pendulum.x = clampedX;
+            this.lastDragX = clampedX;
+            this.lastDragTime = currentTime;
         }
     }
 
     onMouseUp() {
         this.isDragging = false;
+        this.lastDragTime = 0;
         this.canvas.style.cursor = 'default';
     }
 

@@ -36,6 +36,10 @@ function init() {
     // 이벤트 리스너
     startBtn.addEventListener('click', startSimulation);
     stopBtn.addEventListener('click', stopSimulation);
+
+    // 애니메이션 루프 시작 (항상 실행)
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(animate);
 }
 
 /**
@@ -47,12 +51,6 @@ function startSimulation() {
     // 버튼 상태 업데이트
     startBtn.disabled = true;
     stopBtn.disabled = false;
-
-    // 애니메이션 시작
-    if (!animationId) {
-        lastTime = performance.now();
-        animationId = requestAnimationFrame(animate);
-    }
 
     // UI 효과
     document.body.classList.add('active-simulation');
