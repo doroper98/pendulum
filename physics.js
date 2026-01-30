@@ -129,11 +129,11 @@ class PendulumController {
         this.Kp_cart = 1.5;     // 카트 위치 게인
         this.Kd_cart = 6.0;     // 카트 속도 게인
 
-        // 스윙업 파라미터
-        this.K_energy = 4.0;    // 에너지 제어 게인 (더 감소)
+        // 스윙업 파라미터 (에너지 증가)
+        this.K_energy = 10.0;   // 에너지 제어 게인 (증가)
 
-        // 모드 전환 (더 빨리 밸런싱으로)
-        this.balanceThreshold = 0.6; // 라디안 (약 34도 - 확대)
+        // 모드 전환
+        this.balanceThreshold = 0.5; // 라디안 (약 29도)
         this.mode = 'swing';
 
         // 초기 충격
@@ -163,8 +163,8 @@ class PendulumController {
         const E = this.getEnergy();
         const E_error = E_target - E;
 
-        // 각속도가 너무 크면 스윙업 중단 (발산 방지 - 더 강하게)
-        if (Math.abs(this.pendulum.theta_dot) > 4.0) {
+        // 각속도가 너무 크면 스윙업 중단 (발산 방지)
+        if (Math.abs(this.pendulum.theta_dot) > 6.0) {
             // 강력한 감쇠만 적용
             return -8.0 * this.pendulum.x - 15.0 * this.pendulum.x_dot;
         }
@@ -222,9 +222,9 @@ class PendulumController {
             }
 
             const elapsed = (performance.now() - this.kickTime) / 1000;
-            if (elapsed < 0.4) {
-                // 더 강한 진동
-                this.pendulum.F = 20.0 * Math.sin(elapsed * 12);
+            if (elapsed < 0.5) {
+                // 더 강한 초기 충격
+                this.pendulum.F = 25.0 * Math.sin(elapsed * 10);
                 return;
             } else {
                 this.kickApplied = true;
