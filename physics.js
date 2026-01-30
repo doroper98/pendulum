@@ -79,6 +79,12 @@ class InvertedPendulum {
         // 각도를 [-PI, PI] 범위로 정규화
         this.theta = ((this.theta + Math.PI) % (2 * Math.PI)) - Math.PI;
 
+        // 각속도 제한 (발산 방지)
+        const maxAngularVelocity = 10.0; // rad/s
+        if (Math.abs(this.theta_dot) > maxAngularVelocity) {
+            this.theta_dot = Math.sign(this.theta_dot) * maxAngularVelocity;
+        }
+
         // 카트 위치 제약
         if (Math.abs(this.x) > this.maxX) {
             this.x = Math.sign(this.x) * this.maxX;
@@ -117,14 +123,14 @@ class PendulumController {
     constructor(pendulum) {
         this.pendulum = pendulum;
 
-        // 조정된 제어 파라미터
-        this.Kp = 40.0;         // 각도 비례 게인 (증가)
-        this.Kd = 15.0;         // 각속도 미분 게인 (증가)
-        this.Kp_cart = 2.0;     // 카트 위치 게인 (증가)
-        this.Kd_cart = 8.0;     // 카트 속도 게인 (증가)
+        // 안정적인 제어 파라미터
+        this.Kp = 35.0;         // 각도 비례 게인
+        this.Kd = 20.0;         // 각속도 미분 게인 (증가 - 감쇠 강화)
+        this.Kp_cart = 1.5;     // 카트 위치 게인
+        this.Kd_cart = 6.0;     // 카트 속도 게인
 
         // 스윙업 파라미터
-        this.K_energy = 8.0;    // 에너지 제어 게인 (증가)
+        this.K_energy = 6.0;    // 에너지 제어 게인 (감소)
 
         // 모드 전환
         this.balanceThreshold = 0.35; // 라디안 (약 20도)
@@ -156,6 +162,12 @@ class PendulumController {
         const E_target = this.pendulum.m * this.pendulum.g * this.pendulum.L;
         const E = this.getEnergy();
         const E_error = E_target - E;
+
+        // 각속도가 너무 크면 스윙업 중단 (발산 방지)
+        if (Math.abs(this.pendulum.theta_dot) > 8.0) {
+            // 강력한 감쇠만 적용
+            return -5.0 * this.pendulum.x - 10.0 * this.pendulum.x_dot;
+        }
 
         // 에너지가 부족하면 펜듈럼과 같은 방향으로 힘을 가함
         let sign = Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
