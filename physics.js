@@ -79,8 +79,8 @@ class InvertedPendulum {
         // 각도를 [-PI, PI] 범위로 정규화
         this.theta = ((this.theta + Math.PI) % (2 * Math.PI)) - Math.PI;
 
-        // 각속도 제한 (발산 방지)
-        const maxAngularVelocity = 10.0; // rad/s
+        // 각속도 제한 (발산 방지 - 더 강하게)
+        const maxAngularVelocity = 5.0; // rad/s (감소)
         if (Math.abs(this.theta_dot) > maxAngularVelocity) {
             this.theta_dot = Math.sign(this.theta_dot) * maxAngularVelocity;
         }
@@ -124,16 +124,16 @@ class PendulumController {
         this.pendulum = pendulum;
 
         // 안정적인 제어 파라미터
-        this.Kp = 35.0;         // 각도 비례 게인
-        this.Kd = 20.0;         // 각속도 미분 게인 (증가 - 감쇠 강화)
+        this.Kp = 30.0;         // 각도 비례 게인
+        this.Kd = 25.0;         // 각속도 미분 게인 (감쇠 대폭 증가)
         this.Kp_cart = 1.5;     // 카트 위치 게인
         this.Kd_cart = 6.0;     // 카트 속도 게인
 
         // 스윙업 파라미터
-        this.K_energy = 6.0;    // 에너지 제어 게인 (감소)
+        this.K_energy = 4.0;    // 에너지 제어 게인 (더 감소)
 
-        // 모드 전환
-        this.balanceThreshold = 0.35; // 라디안 (약 20도)
+        // 모드 전환 (더 빨리 밸런싱으로)
+        this.balanceThreshold = 0.6; // 라디안 (약 34도 - 확대)
         this.mode = 'swing';
 
         // 초기 충격
@@ -163,10 +163,10 @@ class PendulumController {
         const E = this.getEnergy();
         const E_error = E_target - E;
 
-        // 각속도가 너무 크면 스윙업 중단 (발산 방지)
-        if (Math.abs(this.pendulum.theta_dot) > 8.0) {
+        // 각속도가 너무 크면 스윙업 중단 (발산 방지 - 더 강하게)
+        if (Math.abs(this.pendulum.theta_dot) > 4.0) {
             // 강력한 감쇠만 적용
-            return -5.0 * this.pendulum.x - 10.0 * this.pendulum.x_dot;
+            return -8.0 * this.pendulum.x - 15.0 * this.pendulum.x_dot;
         }
 
         // 에너지가 부족하면 펜듈럼과 같은 방향으로 힘을 가함
@@ -231,10 +231,10 @@ class PendulumController {
             }
         }
 
-        // 모드 결정
+        // 모드 결정 (더 빨리 밸런싱으로 전환)
         const angleFromTop = Math.abs(this.pendulum.theta);
 
-        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 1.5) {
+        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 3.0) {
             this.mode = 'balance';
         } else {
             this.mode = 'swing';
