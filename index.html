@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>역진자 제어 시뮬레이션</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>역진자 제어 시뮬레이션</h1>
+            <p class="subtitle">Inverted Pendulum Control System</p>
+        </header>
+
+        <div class="simulation-wrapper">
+            <canvas id="simulationCanvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn btn-start">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                시작
+            </button>
+            <button id="stopBtn" class="btn btn-stop" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="6" width="12" height="12"></rect>
+                </svg>
+                종료
+            </button>
+        </div>
+
+        <div class="telemetry">
+            <div class="telemetry-card">
+                <div class="telemetry-label">펜듈럼 각도</div>
+                <div class="telemetry-value" id="angleValue">0.0°</div>
+            </div>
+            <div class="telemetry-card">
+                <div class="telemetry-label">카트 위치</div>
+                <div class="telemetry-value" id="positionValue">0.0 m</div>
+            </div>
+            <div class="telemetry-card">
+                <div class="telemetry-label">제어 모드</div>
+                <div class="telemetry-value" id="modeValue">대기</div>
+            </div>
+            <div class="telemetry-card">
+                <div class="telemetry-label">제어력</div>
+                <div class="telemetry-value" id="forceValue">0.0 N</div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3>시뮬레이션 정보</h3>
+            <ul>
+                <li><strong>시작:</strong> 펜듈럼을 수직으로 세우고 균형을 유지합니다</li>
+                <li><strong>종료:</strong> 제어를 중단하고 펜듈럼이 중력에 의해 떨어집니다</li>
+                <li><strong>제어 알고리즘:</strong> 에너지 기반 스윙업 + PID 밸런싱</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="physics.js"></script>
+    <script src="renderer.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
