@@ -10,7 +10,6 @@ class InvertedPendulum {
         this.L = 1.0;           // 펜듈럼 길이 (m)
         this.g = 9.81;          // 중력 가속도 (m/s^2)
         this.b = 0.1;           // 카트 마찰 계수
-        this.I = this.m * this.L * this.L / 3; // 펜듈럼 관성 모멘트
 
         // 상태 변수
         this.x = 0;             // 카트 위치 (m)
@@ -24,11 +23,11 @@ class InvertedPendulum {
 
         // 제약 조건
         this.maxX = 3.0;        // 카트 최대 이동 거리 (m)
-        this.maxForce = 50.0;   // 최대 제어력 (N)
+        this.maxForce = 30.0;   // 최대 제어력 (N) - 감소
     }
 
     /**
-     * 시스템의 미분 방정식 (상태 공간 방정식)
+     * 시스템의 미분 방정식 (간소화된 버전)
      */
     derivatives(state, force) {
         const [x, x_dot, theta, theta_dot] = state;
@@ -36,17 +35,19 @@ class InvertedPendulum {
         const sin_theta = Math.sin(theta);
         const cos_theta = Math.cos(theta);
 
-        // 운동 방정식 (Lagrangian 역학에서 유도)
-        const denominator = this.M + this.m * sin_theta * sin_theta;
+        // 간소화된 운동 방정식
+        const total_mass = this.M + this.m;
+        const pole_mass_length = this.m * this.L;
 
-        // 카트 가속도
-        const x_ddot = (force + this.m * this.L * theta_dot * theta_dot * sin_theta
-            - this.b * x_dot - this.m * this.g * sin_theta * cos_theta) / denominator;
+        // 분모 계산
+        const temp = (force + pole_mass_length * theta_dot * theta_dot * sin_theta) / total_mass;
 
         // 펜듈럼 각가속도
-        const theta_ddot = (-force * cos_theta - this.m * this.L * theta_dot * theta_dot * sin_theta * cos_theta
-            + this.b * x_dot * cos_theta + (this.M + this.m) * this.g * sin_theta)
-            / (this.L * denominator);
+        const theta_ddot = (this.g * sin_theta - cos_theta * temp) /
+            (this.L * (4.0 / 3.0 - this.m * cos_theta * cos_theta / total_mass));
+
+        // 카트 가속도
+        const x_ddot = temp - pole_mass_length * theta_ddot * cos_theta / total_mass;
 
         return [x_dot, x_ddot, theta_dot, theta_ddot];
     }
@@ -116,87 +117,73 @@ class PendulumController {
     constructor(pendulum) {
         this.pendulum = pendulum;
 
-        // PID 제어 파라미터 (밸런싱 모드) - 더 보수적으로 조정
-        this.Kp_balance = 60.0;     // 비례 게인 (감소)
-        this.Kd_balance = 25.0;     // 미분 게인 (감소)
-        this.Ki_balance = 0.5;      // 적분 게인 (감소)
+        // 단순화된 제어 파라미터
+        this.Kp = 20.0;         // 각도 비례 게인
+        this.Kd = 10.0;         // 각속도 미분 게인
+        this.Kp_cart = 1.0;     // 카트 위치 게인
+        this.Kd_cart = 5.0;     // 카트 속도 게인
 
-        // 스윙업 제어 파라미터
-        this.K_swing = 5.0;         // 에너지 제어 게인 (감소)
-        this.E_desired = this.pendulum.m * this.pendulum.g * this.pendulum.L; // 목표 에너지
+        // 스윙업 파라미터
+        this.K_energy = 2.0;    // 에너지 제어 게인
 
-        // 모드 전환 임계값
-        this.balanceThreshold = 0.4; // 라디안 (약 23도, 더 넓게)
+        // 모드 전환
+        this.balanceThreshold = 0.5; // 라디안 (약 30도)
+        this.mode = 'swing';
 
-        // 제어 모드
-        this.mode = 'swing';  // 'swing' 또는 'balance'
-
-        // 적분 항
-        this.integral = 0;
-        this.prevError = 0;
-
-        // 초기 충격 상태
-        this.initialKickApplied = false;
-        this.kickStartTime = 0;
+        // 초기 충격
+        this.kickApplied = false;
+        this.kickTime = 0;
     }
 
     /**
-     * 펜듈럼의 현재 에너지 계산
+     * 에너지 계산
      */
     getEnergy() {
         const p = this.pendulum;
-        const h = -p.L * Math.cos(p.theta); // 높이 (아래 = -L, 위 = L)
-        const v = p.L * p.theta_dot; // 펜듈럼 끝의 속도
+        const h = -p.L * Math.cos(p.theta);
+        const v = p.L * p.theta_dot;
 
-        const PE = p.m * p.g * h; // 위치 에너지
-        const KE = 0.5 * p.m * v * v; // 운동 에너지
+        const PE = p.m * p.g * h;
+        const KE = 0.5 * p.m * v * v;
 
         return PE + KE;
     }
 
     /**
-     * 스윙업 제어 (에너지 기반)
+     * 스윙업 제어 (매우 단순화)
      */
     swingUpControl() {
+        const E_target = this.pendulum.m * this.pendulum.g * this.pendulum.L;
         const E = this.getEnergy();
-        const E_error = this.E_desired - E;
+        const E_error = E_target - E;
 
-        // 에너지 오차에 비례하여 힘 가함
-        // 각속도가 너무 작으면 방향을 랜덤하게 (초기 충격)
-        let direction = Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
-        if (Math.abs(this.pendulum.theta_dot) < 0.1) {
-            direction = Math.cos(this.pendulum.theta) > 0 ? 1 : -1;
-        }
+        // 에너지가 부족하면 펜듈럼과 같은 방향으로 힘을 가함
+        const sign = Math.sign(this.pendulum.theta_dot * Math.cos(this.pendulum.theta));
 
-        const force = this.K_swing * E_error * direction;
+        // 에너지 오차에 비례하는 힘
+        let force = this.K_energy * E_error * sign;
+
+        // 카트가 중앙으로 돌아오도록
+        force -= 0.5 * this.pendulum.x;
+        force -= 1.0 * this.pendulum.x_dot;
 
         return force;
     }
 
     /**
-     * 밸런싱 제어 (PID)
+     * 밸런싱 제어 (단순 PD)
      */
-    balanceControl(dt) {
-        // 목표: theta = 0 (수직 위), x = 0 (중앙)
-        const theta_error = -this.pendulum.theta; // 각도 오차
-        const x_error = -this.pendulum.x; // 위치 오차
+    balanceControl() {
+        // 각도 오차 (목표: 0)
+        const theta_error = -this.pendulum.theta;
 
-        // PID 제어
-        this.integral += theta_error * dt;
-        const derivative = (theta_error - this.prevError) / dt;
-        this.prevError = theta_error;
+        // PD 제어
+        const force_angle = this.Kp * theta_error + this.Kd * (-this.pendulum.theta_dot);
 
-        // 적분 와인드업 방지 (더 강하게)
-        this.integral = Math.max(-5, Math.min(5, this.integral));
+        // 카트 위치 제어
+        const force_cart = -this.Kp_cart * this.pendulum.x - this.Kd_cart * this.pendulum.x_dot;
 
-        // 제어력 계산 (각도와 위치 모두 고려)
-        const force = this.Kp_balance * theta_error
-            + this.Kd_balance * (-this.pendulum.theta_dot)
-            + this.Ki_balance * this.integral
-            + 3.0 * x_error  // 위치 복원력 (감소)
-            + 8.0 * (-this.pendulum.x_dot); // 위치 감쇠 (감소)
-
-        return force;
+        return force_angle + force_cart;
     }
 
     /**
@@ -206,47 +193,45 @@ class PendulumController {
         if (!this.pendulum.controlActive) {
             this.pendulum.F = 0;
             this.mode = 'swing';
-            this.integral = 0;
-            this.prevError = 0;
-            this.initialKickApplied = false;
+            this.kickApplied = false;
+            this.kickTime = 0;
             return;
         }
 
-        // 초기 충격 적용 (시작 후 처음 0.5초 동안)
-        if (!this.initialKickApplied) {
-            if (this.kickStartTime === 0) {
-                this.kickStartTime = performance.now();
+        // 초기 충격 (0.3초 동안)
+        if (!this.kickApplied) {
+            if (this.kickTime === 0) {
+                this.kickTime = performance.now();
             }
-            const elapsed = (performance.now() - this.kickStartTime) / 1000;
 
-            if (elapsed < 0.5) {
-                // 작은 초기 충격을 가함
-                this.pendulum.F = 15.0 * Math.sin(elapsed * 10); // 진동하는 힘
+            const elapsed = (performance.now() - this.kickTime) / 1000;
+            if (elapsed < 0.3) {
+                // 작은 진동
+                this.pendulum.F = 10.0 * Math.sin(elapsed * 15);
                 return;
             } else {
-                this.initialKickApplied = true;
+                this.kickApplied = true;
             }
         }
 
         // 모드 결정
         const angleFromTop = Math.abs(this.pendulum.theta);
 
-        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 1.5) {
+        if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 2.0) {
             this.mode = 'balance';
-        } else if (angleFromTop > this.balanceThreshold * 1.5) {
+        } else {
             this.mode = 'swing';
-            this.integral = 0; // 적분 리셋
         }
 
         // 제어력 계산
         let force;
         if (this.mode === 'balance') {
-            force = this.balanceControl(dt);
+            force = this.balanceControl();
         } else {
             force = this.swingUpControl();
         }
 
-        // 제어력 제한 (더 강하게)
+        // 제어력 제한
         force = Math.max(-this.pendulum.maxForce, Math.min(this.pendulum.maxForce, force));
 
         this.pendulum.F = force;
