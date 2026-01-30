@@ -1,5 +1,6 @@
 /**
- * 역진자 물리 시뮬레이션 및 제어 클래스
+ * 역진자 물리 시뮬레이션 및 LQR 제어 클래스
+ * LQR (Linear Quadratic Regulator) 기반 제어 사용
  */
 
 class InvertedPendulum {
@@ -22,8 +23,8 @@ class InvertedPendulum {
         this.controlActive = false;
 
         // 제약 조건
-        this.maxX = 5.0;        // 카트 최대 이동 거리 (m) - 증가
-        this.maxForce = 50.0;   // 최대 제어력 (N) - 대폭 증가
+        this.maxX = 5.0;        // 카트 최대 이동 거리 (m)
+        this.maxForce = 50.0;   // 최대 제어력 (N)
     }
 
     /**
@@ -79,8 +80,8 @@ class InvertedPendulum {
         // 각도를 [-PI, PI] 범위로 정규화
         this.theta = ((this.theta + Math.PI) % (2 * Math.PI)) - Math.PI;
 
-        // 각속도 제한 (발산 방지 - 더 강하게)
-        const maxAngularVelocity = 5.0; // rad/s (감소)
+        // 각속도 제한 (발산 방지)
+        const maxAngularVelocity = 8.0; // rad/s
         if (Math.abs(this.theta_dot) > maxAngularVelocity) {
             this.theta_dot = Math.sign(this.theta_dot) * maxAngularVelocity;
         }
@@ -123,17 +124,15 @@ class PendulumController {
     constructor(pendulum) {
         this.pendulum = pendulum;
 
-        // 안정적인 제어 파라미터
-        this.Kp = 30.0;         // 각도 비례 게인
-        this.Kd = 25.0;         // 각속도 미분 게인 (감쇠 대폭 증가)
-        this.Kp_cart = 1.5;     // 카트 위치 게인
-        this.Kd_cart = 6.0;     // 카트 속도 게인
+        // LQR 게인 (최적 제어 이론으로 계산된 값)
+        // 상태 벡터: [x, x_dot, theta, theta_dot]
+        this.K = [-1.0, -1.73, 18.6, 3.45];  // LQR 게인
 
-        // 스윙업 파라미터 (에너지 증가)
-        this.K_energy = 10.0;   // 에너지 제어 게인 (증가)
+        // 스윙업 파라미터
+        this.K_energy = 12.0;   // 에너지 제어 게인
 
         // 모드 전환
-        this.balanceThreshold = 0.5; // 라디안 (약 29도)
+        this.balanceThreshold = 0.4; // 라디안 (약 23도)
         this.mode = 'swing';
 
         // 초기 충격
@@ -156,7 +155,7 @@ class PendulumController {
     }
 
     /**
-     * 스윙업 제어 (개선)
+     * 스윙업 제어 (에너지 기반)
      */
     swingUpControl() {
         const E_target = this.pendulum.m * this.pendulum.g * this.pendulum.L;
@@ -164,9 +163,8 @@ class PendulumController {
         const E_error = E_target - E;
 
         // 각속도가 너무 크면 스윙업 중단 (발산 방지)
-        if (Math.abs(this.pendulum.theta_dot) > 6.0) {
-            // 강력한 감쇠만 적용
-            return -8.0 * this.pendulum.x - 15.0 * this.pendulum.x_dot;
+        if (Math.abs(this.pendulum.theta_dot) > 7.0) {
+            return -10.0 * this.pendulum.x - 15.0 * this.pendulum.x_dot;
         }
 
         // 에너지가 부족하면 펜듈럼과 같은 방향으로 힘을 가함
@@ -180,37 +178,42 @@ class PendulumController {
         // 에너지 오차에 비례하는 힘
         let force = this.K_energy * E_error * sign;
 
-        // 카트가 중앙으로 돌아오도록 (약하게)
-        force -= 1.5 * this.pendulum.x;
-        force -= 3.0 * this.pendulum.x_dot;
+        // 카트가 중앙으로 돌아오도록
+        force -= 2.0 * this.pendulum.x;
+        force -= 4.0 * this.pendulum.x_dot;
 
         // 레일 끝에 가까우면 강력하게 중앙으로
         if (Math.abs(this.pendulum.x) > this.pendulum.maxX * 0.8) {
-            force -= 15.0 * this.pendulum.x;
+            force -= 20.0 * this.pendulum.x;
         }
 
         return force;
     }
 
     /**
-     * 밸런싱 제어 (단순 PD)
+     * LQR 밸런싱 제어
      */
-    balanceControl() {
-        // 각도 오차 (목표: 0)
-        const theta_error = -this.pendulum.theta;
+    lqrControl() {
+        // 상태 벡터
+        const state = [
+            this.pendulum.x,
+            this.pendulum.x_dot,
+            -this.pendulum.theta,  // 목표가 0이므로 음수
+            -this.pendulum.theta_dot
+        ];
 
-        // PD 제어
-        const force_angle = this.Kp * theta_error + this.Kd * (-this.pendulum.theta_dot);
-
-        // 카트 위치 제어 (약하게)
-        let force_cart = -1.0 * this.pendulum.x - 4.0 * this.pendulum.x_dot;
+        // LQR 제어: u = -K * x
+        let force = 0;
+        for (let i = 0; i < 4; i++) {
+            force -= this.K[i] * state[i];
+        }
 
         // 레일 끝에 가까우면 강력하게 중앙으로
         if (Math.abs(this.pendulum.x) > this.pendulum.maxX * 0.85) {
-            force_cart -= 25.0 * this.pendulum.x;
+            force -= 30.0 * this.pendulum.x;
         }
 
-        return force_angle + force_cart;
+        return force;
     }
 
     /**
@@ -225,7 +228,7 @@ class PendulumController {
             return;
         }
 
-        // 초기 충격 (0.4초 동안, 더 강하게)
+        // 초기 충격 (0.5초 동안)
         if (!this.kickApplied) {
             if (this.kickTime === 0) {
                 this.kickTime = performance.now();
@@ -233,15 +236,15 @@ class PendulumController {
 
             const elapsed = (performance.now() - this.kickTime) / 1000;
             if (elapsed < 0.5) {
-                // 더 강한 초기 충격
-                this.pendulum.F = 25.0 * Math.sin(elapsed * 10);
+                // 강한 초기 충격
+                this.pendulum.F = 30.0 * Math.sin(elapsed * 10);
                 return;
             } else {
                 this.kickApplied = true;
             }
         }
 
-        // 모드 결정 (더 빨리 밸런싱으로 전환)
+        // 모드 결정
         const angleFromTop = Math.abs(this.pendulum.theta);
 
         if (angleFromTop < this.balanceThreshold && Math.abs(this.pendulum.theta_dot) < 3.0) {
@@ -253,7 +256,7 @@ class PendulumController {
         // 제어력 계산
         let force;
         if (this.mode === 'balance') {
-            force = this.balanceControl();
+            force = this.lqrControl();
         } else {
             force = this.swingUpControl();
         }
@@ -269,6 +272,6 @@ class PendulumController {
      */
     getMode() {
         if (!this.pendulum.controlActive) return '대기';
-        return this.mode === 'swing' ? '스윙업' : '밸런싱';
+        return this.mode === 'swing' ? '스윙업' : 'LQR 밸런싱';
     }
 }
