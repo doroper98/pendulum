@@ -36,7 +36,7 @@ class InvertedPendulum {
 
         // ===== 제약 조건 =====
         this.maxX = 4.0;        // 카트 최대 이동 거리 (m)
-        this.maxForce = 50.0;   // 최대 제어력 (N)
+        this.maxForce = 80.0;   // 최대 제어력 (N) - 대폭 증가
 
         // ===== 에너지 모니터링 =====
         this.totalEnergy = 0;
@@ -205,8 +205,8 @@ class PendulumController {
     constructor(pendulum) {
         this.p = pendulum;
 
-        // ===== 스윙업 파라미터 =====
-        this.swingGain = 40.0;      // 에너지 펌핑 게인
+        // ===== 스윙업 파라미터 (강화) =====
+        this.swingGain = 80.0;      // 에너지 펌핑 게인 (대폭 증가)
 
         // ===== LQR 게인 =====
         // u = -K * [x, x_dot, theta, theta_dot]
@@ -267,8 +267,8 @@ class PendulumController {
         const sign = Math.sign(this.p.theta_dot * Math.cos(this.p.theta));
         let u = -this.swingGain * E_error * sign;
 
-        // 카트 위치 복원 (약하게)
-        u -= 1.5 * this.p.x + 2.5 * this.p.x_dot;
+        // 카트 위치 복원 (최소화 - 빠른 스윙업 우선)
+        u -= 0.5 * this.p.x + 1.0 * this.p.x_dot;
 
         // 레일 끝 보호
         if (Math.abs(this.p.x) > this.p.maxX * 0.7) {
@@ -335,9 +335,9 @@ class PendulumController {
 
         const elapsed = (performance.now() - this.startTime) / 1000;
 
-        // 처음 0.4초: 강력한 초기 충격
-        if (elapsed < 0.4) {
-            this.p.F = 35 * Math.sin(elapsed * 18);
+        // 처음 0.6초: 강력한 초기 충격
+        if (elapsed < 0.6) {
+            this.p.F = 60 * Math.sin(elapsed * 12);
             this.mode = 'kick';
             return;
         }
