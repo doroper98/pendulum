@@ -214,8 +214,12 @@ class PendulumController {
         this.K = [1.0, 2.0, -40.0, -8.0];
 
         // ===== 모드 전환 =====
-        this.switchAngle = 0.35;    // 약 20도
+        this.switchAngle = 0.35;    // 약 20도 (LQR 밸런싱)
+        this.catchAngle = 0.5;      // 약 30도 (11시~1시 범위 - 캐치 모드)
         this.switchVel = 2.5;       // rad/s
+
+        // ===== 캐치 모드 파라미터 =====
+        this.catchGain = 60.0;      // 캐치 가속 게인
 
         // ===== 상태 =====
         this.mode = 'idle';
@@ -309,6 +313,47 @@ class PendulumController {
     }
 
     /**
+     * 캐치 제어 (11시~1시 범위)
+     * 
+     * 펜듈럼이 수평선 위에 있을 때 순간적인 빠른 가속으로
+     * 12시 방향(theta=0)으로 맞춤
+     * 
+     * 11시 (theta > 0): 왼쪽으로 빠르게 가속
+     * 1시 (theta < 0): 오른쪽으로 빠르게 가속
+     */
+    catchControl() {
+        const theta = this.p.theta;
+        const theta_dot = this.p.theta_dot;
+
+        // 각도 방향에 따른 순간 가속
+        // theta > 0 (11시): 카트를 왼쪽으로 밀어서 펜듈럼을 오른쪽(12시)으로
+        // theta < 0 (1시): 카트를 오른쪽으로 밀어서 펜듈럼을 왼쪽(12시)으로
+        let u = -this.catchGain * theta;
+
+        // 각속도 감쇠 (빠른 안정화)
+        u -= 15.0 * theta_dot;
+
+        // 카트 위치 복원
+        u -= 2.0 * this.p.x + 4.0 * this.p.x_dot;
+
+        // 레일 끝 보호
+        if (Math.abs(this.p.x) > this.p.maxX * 0.8) {
+            u -= 35.0 * this.p.x;
+        }
+
+        return u;
+    }
+
+    /**
+     * 캐치 가능 여부 판단 (11시~1시 범위)
+     */
+    canCatch() {
+        const angleFromTop = Math.abs(this.p.theta);
+        return angleFromTop >= this.switchAngle &&
+            angleFromTop < this.catchAngle;
+    }
+
+    /**
      * 밸런싱 가능 여부 판단
      */
     canBalance() {
@@ -342,12 +387,14 @@ class PendulumController {
             return;
         }
 
-        // 모드 결정
+        // 모드 결정 (3단계: swing -> catch -> balance)
+        const angleFromTop = Math.abs(this.p.theta);
+
         if (this.canBalance()) {
             this.mode = 'balance';
-        } else if (this.mode === 'balance' && Math.abs(this.p.theta) > this.switchAngle * 2) {
-            this.mode = 'swing';
-        } else if (this.mode !== 'balance') {
+        } else if (this.canCatch()) {
+            this.mode = 'catch';
+        } else {
             this.mode = 'swing';
         }
 
@@ -355,6 +402,8 @@ class PendulumController {
         let u;
         if (this.mode === 'balance') {
             u = this.balanceControl();
+        } else if (this.mode === 'catch') {
+            u = this.catchControl();
         } else {
             u = this.swingUpControl();
         }
@@ -373,6 +422,7 @@ class PendulumController {
             case 'idle': return '대기';
             case 'kick': return '초기화';
             case 'swing': return '스윙업';
+            case 'catch': return '캐치';
             case 'balance': return 'LQR 밸런싱';
             default: return this.mode;
         }
